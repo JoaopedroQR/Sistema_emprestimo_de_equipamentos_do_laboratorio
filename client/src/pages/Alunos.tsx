@@ -29,52 +29,71 @@ export default function Alunos() {
   const [novoAlunoModalOpen, setNovoAlunoModalOpen] = useState(false);
   const [detalhesModalOpen, setDetalhesModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  const [students, setStudents] = useState<Student[]>([
-    {
-      id: "1",
-      name: "João Silva",
-      email: "joao.silva@academy.com",
-      registration: "2024001",
-      activeLoanCount: 2,
-      hasPendency: false,
-      lastLoan: "Notebook Lenovo",
-    },
-    {
-      id: "2",
-      name: "Maria Santos",
-      email: "maria.santos@academy.com",
-      registration: "2024002",
-      activeLoanCount: 1,
-      hasPendency: true,
-      lastLoan: "Microscópio Digital",
-    },
-    {
-      id: "3",
-      name: "Pedro Oliveira",
-      email: "pedro.oliveira@academy.com",
-      registration: "2024003",
-      activeLoanCount: 0,
-      hasPendency: false,
-    },
-    {
-      id: "4",
-      name: "Ana Costa",
-      email: "ana.costa@academy.com",
-      registration: "2024004",
-      activeLoanCount: 3,
-      hasPendency: false,
-      lastLoan: "Osciloscópio",
-    },
-    {
-      id: "5",
-      name: "Carlos Mendes",
-      email: "carlos.mendes@academy.com",
-      registration: "2024005",
-      activeLoanCount: 1,
-      hasPendency: true,
-      lastLoan: "Notebook Dell",
-    },
-  ]);
+  // const [students, setStudents] = useState<Student[]>([
+  //   {
+  //     id: "1",
+  //     name: "João Silva",
+  //     email: "joao.silva@academy.com",
+  //     registration: "2024001",
+  //     activeLoanCount: 2,
+  //     hasPendency: false,
+  //     lastLoan: "Notebook Lenovo",
+  //   },
+  //   {
+  //     id: "2",
+  //     name: "Maria Santos",
+  //     email: "maria.santos@academy.com",
+  //     registration: "2024002",
+  //     activeLoanCount: 1,
+  //     hasPendency: true,
+  //     lastLoan: "Microscópio Digital",
+  //   },
+  //   {
+  //     id: "3",
+  //     name: "Pedro Oliveira",
+  //     email: "pedro.oliveira@academy.com",
+  //     registration: "2024003",
+  //     activeLoanCount: 0,
+  //     hasPendency: false,
+  //   },
+  //   {
+  //     id: "4",
+  //     name: "Ana Costa",
+  //     email: "ana.costa@academy.com",
+  //     registration: "2024004",
+  //     activeLoanCount: 3,
+  //     hasPendency: false,
+  //     lastLoan: "Osciloscópio",
+  //   },
+  //   {
+  //     id: "5",
+  //     name: "Carlos Mendes",
+  //     email: "carlos.mendes@academy.com",
+  //     registration: "2024005",
+  //     activeLoanCount: 1,
+  //     hasPendency: true,
+  //     lastLoan: "Notebook Dell",
+  //   },
+  // ]);
+
+  const [students, setStudents] = useState<Student[]>([]);
+
+  const fetchAlunos = async () => {
+    try {
+      const response = await fetch('/api/alunos');
+      const data = await response.json();
+      // Traduzimos id_aluno do banco para id que o front espera
+      const mappedData = data.map((a: any) => ({
+        ...a,
+        id: a.id_aluno.toString(),
+        name: a.nome,
+        registration: a.matricula
+      }));
+      setStudents(mappedData);
+    } catch (error) {
+      console.error("Erro ao buscar alunos:", error);
+    }
+  };
 
   const handleAddStudent = (newStudent: {
     name: string;
@@ -96,6 +115,7 @@ export default function Alunos() {
   };
 
   useEffect(() => {
+    fetchAlunos();
     const role = (localStorage.getItem("userRole") as "admin" | "user" | null) || "user";
     const name = localStorage.getItem("userName") || "Usuário Demo";
 
@@ -299,7 +319,35 @@ export default function Alunos() {
       <NovoAlunoModal
         open={novoAlunoModalOpen}
         onOpenChange={setNovoAlunoModalOpen}
-        onAddStudent={handleAddStudent}
+        onAddStudent={async (newStudent) => {
+          try {
+            // 1. Envia para o seu Banco de Dados via API
+            const response = await fetch('/api/alunos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                // Aqui garantimos que pegamos o valor correto, não importa o nome no modal
+                nome: newStudent.name || newStudent.nome,
+                matricula: newStudent.registration || newStudent.matricula || newStudent.id,
+                email: newStudent.email || "",
+                telefone: newStudent.phone || newStudent.telefone || ""
+              })
+            });
+
+            if (response.ok) {
+              // 2. Chama a função que criamos para recarregar a lista do banco
+              await fetchAlunos(); 
+              toast.success(`Aluno salvo no banco com sucesso!`);
+              setNovoAlunoModalOpen(false);
+            } else {
+              const errorData = await response.json();
+              toast.error(`Erro no banco: ${errorData.error || "Verifique os dados"}`);
+            }
+          } catch (error) {
+            console.error("Erro na conexão:", error);
+            toast.error("Não foi possível conectar ao servidor backend.");
+          }
+        }}
       />
 
       {/* Modal de Detalhes do Aluno */}
