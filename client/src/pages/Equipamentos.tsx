@@ -34,49 +34,72 @@ export default function Equipamentos() {
   const [editarModalOpen, setEditarModalOpen] = useState(false);
   const [novoEquipamentoModalOpen, setNovoEquipamentoModalOpen] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
-  const [equipments, setEquipments] = useState<Equipment[]>([
-    {
-      id: "1",
-      name: "Notebook Lenovo",
-      serialNumber: "LNV-2024-001",
-      status: "available",
-      quantity: 10,
-    },
-    {
-      id: "2",
-      name: "Notebook Dell",
-      serialNumber: "DLL-2024-001",
-      status: "borrowed",
-      quantity: 2,
-      borrowedBy: "João Silva",
-      dueDate: "2024-08-10",
-    },
-    {
-      id: "3",
-      name: "Microscópio Digital",
-      serialNumber: "MIC-2024-001",
-      status: "borrowed",
-      quantity: 1,
-      borrowedBy: "Maria Santos",
-      dueDate: "2024-08-04",
-    },
-    {
-      id: "4",
-      name: "Osciloscópio",
-      serialNumber: "OSC-2024-001",
-      status: "maintenance",
-      quantity: 1,
-    },
-    {
-      id: "5",
-      name: "Notebook Acer",
-      serialNumber: "ACR-2024-001",
-      status: "available",
-      quantity: 8,
-    },
-  ]);
+  // const [equipments, setEquipments] = useState<Equipment[]>([
+    // {
+    //   id: "1",
+    //   name: "Notebook Lenovo",
+    //   serialNumber: "LNV-2024-001",
+    //   status: "available",
+    //   quantity: 10,
+    // },
+    // {
+    //   id: "2",
+    //   name: "Notebook Dell",
+    //   serialNumber: "DLL-2024-001",
+    //   status: "borrowed",
+    //   quantity: 2,
+    //   borrowedBy: "João Silva",
+    //   dueDate: "2024-08-10",
+    // },
+    // {
+    //   id: "3",
+    //   name: "Microscópio Digital",
+    //   serialNumber: "MIC-2024-001",
+    //   status: "borrowed",
+    //   quantity: 1,
+    //   borrowedBy: "Maria Santos",
+    //   dueDate: "2024-08-04",
+    // },
+    // {
+    //   id: "4",
+    //   name: "Osciloscópio",
+    //   serialNumber: "OSC-2024-001",
+    //   status: "maintenance",
+    //   quantity: 1,
+    // },
+    // {
+    //   id: "5",
+    //   name: "Notebook Acer",
+    //   serialNumber: "ACR-2024-001",
+    //   status: "available",
+    //   quantity: 8,
+    // },
+  // ]);
+
+  const [equipments, setEquipments] = useState<Equipment[]>([]);
+  
+  const fetchEquipments = async () => {
+    try {
+      const response = await fetch('/api/equipamentos');
+      const data = await response.json();
+      
+      // Aqui nós mapeamos os nomes do banco para os nomes que o front espera
+      const mappedData = data.map((item: any) => ({
+        id: item.id_equipamento.toString(),
+        name: item.nome,
+        serialNumber: item.numero_serie,
+        status: item.status || 'available', // Se estiver nulo no banco, assume disponível
+        quantity: 1, // Como seu banco não tem quantidade, assumimos 1 por item
+      }));
+      
+      setEquipments(mappedData);
+    } catch (error) {
+      console.error("Erro ao carregar dados do banco:", error);
+    }
+  };
 
   useEffect(() => {
+    fetchEquipments();
     const role = (localStorage.getItem("userRole") as "admin" | "user" | null) || "user";
     const name = localStorage.getItem("userName") || "Usuário Demo";
 
