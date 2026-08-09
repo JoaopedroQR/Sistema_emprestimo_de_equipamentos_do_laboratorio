@@ -400,39 +400,39 @@ export default function Equipamentos() {
         }}
       /> */}
 
-    <NovoEquipamentoModal
-      open={novoEquipamentoModalOpen}
-      onOpenChange={setNovoEquipamentoModalOpen}
-      onAddEquipment={async (newEq) => {
-        try {
-          // 1. Envia para o seu Banco de Dados via API
-          const response = await fetch('/api/equipamentos', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              nome: newEq.name,
-              numero_serie: newEq.serialNumber,
-              descricao: newEq.description || "",
-              status: "available",
-              data_aquisicao: new Date().toISOString().split('T')[0] // Data de hoje
-            })
-          });
-    
-          if (response.ok) {
-            // 2. Se salvou no banco, busca a lista atualizada para mostrar na tela
-            await fetchEquipments(); 
-            toast.success(`Equipamento salvo no banco: ${newEq.name}`);
-            setNovoEquipamentoModalOpen(false);
-          } else {
-            toast.error("Erro ao salvar no banco de dados.");
+      <NovoEquipamentoModal
+        open={novoEquipamentoModalOpen}
+        onOpenChange={setNovoEquipamentoModalOpen}
+        onAddEquipment={async (newEq) => {
+          try {
+            // 1. Envia para o seu Banco de Dados via API
+            const response = await fetch('/api/equipamentos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                nome: newEq.name,
+                numero_serie: newEq.serialNumber,
+                descricao: newEq.description || "",
+                status: "available",
+                data_aquisicao: new Date().toISOString().split('T')[0] // Data de hoje
+              })
+            });
+
+            if (response.ok) {
+              // 2. Se salvou no banco, busca a lista atualizada para mostrar na tela
+              await fetchEquipments(); 
+              toast.success(`Equipamento salvo no banco: ${newEq.name}`);
+              setNovoEquipamentoModalOpen(false);
+            } else {
+              toast.error("Erro ao salvar no banco de dados.");
+            }
+          } catch (error) {
+            console.error("Erro na conexão:", error);
+            toast.error("Não foi possível conectar ao servidor.");
           }
-        } catch (error) {
-          console.error("Erro na conexão:", error);
-          toast.error("Não foi possível conectar ao servidor.");
-        }
-      }}
-    />
-      
+        }}
+      />
+
     </DashboardLayout>
   );
 }
