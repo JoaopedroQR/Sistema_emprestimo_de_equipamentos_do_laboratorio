@@ -41,11 +41,6 @@ export default function DashboardLayout({
             href: "/relatorios",
             icon: "📋",
           },
-          {
-            label: "Configurações",
-            href: "/configuracoes",
-            icon: "⚙️",
-          },
         ]
       : []),
   ];
@@ -144,9 +139,6 @@ export default function DashboardLayout({
             Sistema de Empréstimo
           </h1>
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" className="hover:bg-secondary">
-              <Settings className="w-5 h-5" />
-            </Button>
           </div>
         </header>
 
