@@ -42,23 +42,26 @@ router.post("/equipamentos", async (req, res) => {
   const result = await pool.query(query, [nome, numero_serie, req.body.description || "", "available", /* @__PURE__ */ new Date()]);
   res.status(201).json(result.rows[0]);
 });
-router.get("/emprestimos", async (_req, res) => {
-  const query = `
-    SELECT e.*, a.nome as aluno_nome, eq.nome as equipamento_nome 
-    FROM EMPRESTIMO e
-    JOIN ALUNO a ON e.id_aluno = a.id_aluno
-    JOIN EQUIPAMENTO eq ON e.id_equipamento = eq.id_equipamento
-    ORDER BY e.data_emprestimo DESC
-  `;
-  const result = await pool.query(query);
-  res.json(result.rows);
-});
 router.post("/emprestimos", async (req, res) => {
   const { id_aluno, id_equipamento, data_devolucao_prevista, observacoes } = req.body;
-  const query = "INSERT INTO EMPRESTIMO (id_aluno, id_equipamento, data_emprestimo, data_devolucao_prevista, observacoes) VALUES ($1, $2, NOW(), $3, $4) RETURNING *";
-  const result = await pool.query(query, [id_aluno, id_equipamento, data_devolucao_prevista, observacoes]);
-  await pool.query("UPDATE EQUIPAMENTO SET status = 'borrowed' WHERE id_equipamento = $1", [id_equipamento]);
-  res.status(201).json(result.rows[0]);
+  try {
+    const query = "INSERT INTO EMPRESTIMO (id_aluno, id_equipamento, data_emprestimo, data_devolucao_prevista, observacoes) VALUES ($1, $2, NOW(), $3, $4) RETURNING *";
+    await pool.query(query, [id_aluno, id_equipamento, data_devolucao_prevista, observacoes]);
+    await pool.query("UPDATE EQUIPAMENTO SET status = 'borrowed' WHERE id_equipamento = $1", [id_equipamento]);
+    res.status(201).json({ message: "Empr\xE9stimo registrado!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+router.post("/devolucao", async (req, res) => {
+  const { id_equipamento } = req.body;
+  try {
+    await pool.query("UPDATE EMPRESTIMO SET data_devolucao_real = NOW() WHERE id_equipamento = $1 AND data_devolucao_real IS NULL", [id_equipamento]);
+    await pool.query("UPDATE EQUIPAMENTO SET status = 'available' WHERE id_equipamento = $1", [id_equipamento]);
+    res.json({ message: "Equipamento devolvido!" });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 var routes_default = router;
 
