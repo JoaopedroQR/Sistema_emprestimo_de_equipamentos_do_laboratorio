@@ -36,5 +36,5 @@
 ## 5. Declaração de uso de IA
     Foi utilizado nesse trabalho apenas a manus AI.
 
-## Horas escrevendo ou gerando código: JP: 2 horas
-## Horas decidindo o que o sistema deveria fazer: JP: 3 horas 
+## Horas escrevendo ou gerando código: JP: 2 horas / Júlio: 4 horas
+## Horas decidindo o que o sistema deveria fazer: JP: 3 horas / Júlio: 4 horas
