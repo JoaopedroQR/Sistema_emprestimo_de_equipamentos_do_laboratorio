@@ -19,24 +19,25 @@ export default function Relatorios() {
   const [, navigate] = useLocation();
   const [userRole, setUserRole] = useState<"admin" | "user">("admin");
   const [userName, setUserName] = useState("Usuário Demo");
-  const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([
-    {
-      id: "1",
-      equipment: "Microscópio Digital",
-      student: "Maria Santos",
-      borrowDate: "2024-07-28",
-      dueDate: "2024-08-04",
-      daysOverdue: 2,
-    },
-    {
-      id: "2",
-      equipment: "Notebook Dell",
-      student: "Carlos Mendes",
-      borrowDate: "2024-07-30",
-      dueDate: "2024-08-06",
-      daysOverdue: 0,
-    },
-  ]);
+  // const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([
+  //   {
+  //     id: "1",
+  //     equipment: "Microscópio Digital",
+  //     student: "Maria Santos",
+  //     borrowDate: "2024-07-28",
+  //     dueDate: "2024-08-04",
+  //     daysOverdue: 2,
+  //   },
+  //   {
+  //     id: "2",
+  //     equipment: "Notebook Dell",
+  //     student: "Carlos Mendes",
+  //     borrowDate: "2024-07-30",
+  //     dueDate: "2024-08-06",
+  //     daysOverdue: 0,
+  //   },
+  // ]);
+  const [overdueItems, setOverdueItems] = useState<OverdueItem[]>([]);
 
   useEffect(() => {
     const role = (localStorage.getItem("userRole") as "admin" | "user" | null) || "admin";
@@ -46,28 +47,29 @@ export default function Relatorios() {
     setUserName(name);
   }, [navigate]);
 
-  const stats = [
-    {
-      label: "Equipamentos Emprestados",
-      value: "12",
-      color: "bg-blue-50 border-blue-200",
-    },
-    {
-      label: "Empréstimos Atrasados",
-      value: overdueItems.length,
-      color: "bg-red-50 border-red-200",
-    },
-    {
-      label: "Alunos com Pendência",
-      value: "3",
-      color: "bg-yellow-50 border-yellow-200",
-    },
-    {
-      label: "Taxa de Devolução",
-      value: "94%",
-      color: "bg-green-50 border-green-200",
-    },
-  ];
+  // const stats = [
+  //   {
+  //     label: "Equipamentos Emprestados",
+  //     value: "12",
+  //     color: "bg-blue-50 border-blue-200",
+  //   },
+  //   {
+  //     label: "Empréstimos Atrasados",
+  //     value: overdueItems.length,
+  //     color: "bg-red-50 border-red-200",
+  //   },
+  //   {
+  //     label: "Alunos com Pendência",
+  //     value: "3",
+  //     color: "bg-yellow-50 border-yellow-200",
+  //   },
+  //   {
+  //     label: "Taxa de Devolução",
+  //     value: "94%",
+  //     color: "bg-green-50 border-green-200",
+  //   },
+  // ];
+  const stats = [];
 
   return (
     <DashboardLayout userRole={userRole} userName={userName}>
@@ -190,9 +192,9 @@ export default function Relatorios() {
             </h3>
             <div className="space-y-3">
               {[
-                { name: "Notebook Lenovo", count: 8 },
-                { name: "Notebook Dell", count: 5 },
-                { name: "Microscópio Digital", count: 3 },
+                // { name: "Notebook Lenovo", count: 8 },
+                // { name: "Notebook Dell", count: 5 },
+                // { name: "Microscópio Digital", count: 3 },
               ].map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between">
                   <span className="text-gray-700">{item.name}</span>
@@ -210,9 +212,9 @@ export default function Relatorios() {
             </h3>
             <div className="space-y-3">
               {[
-                { name: "João Silva", count: 5 },
-                { name: "Ana Costa", count: 4 },
-                { name: "Pedro Oliveira", count: 3 },
+                // { name: "João Silva", count: 5 },
+                // { name: "Ana Costa", count: 4 },
+                // { name: "Pedro Oliveira", count: 3 },
               ].map((item, idx) => (
                 <div key={idx} className="flex items-center justify-between">
                   <span className="text-gray-700">{item.name}</span>
