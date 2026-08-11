@@ -13,7 +13,8 @@ CREATE TABLE EQUIPAMENTO (
     numero_serie VARCHAR(100) NOT NULL UNIQUE,
     descricao TEXT,
     status VARCHAR(50),
-    data_aquisicao DATE
+    data_aquisicao DATE,
+    quantidade INTEGER DEFAULT 1
 );
 
 CREATE TABLE EMPRESTIMO (
