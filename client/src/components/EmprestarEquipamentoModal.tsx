@@ -14,28 +14,30 @@ interface EmprestarEquipamentoModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   equipmentName: string;
+  students?: any[];
   onConfirm: (data: {
     studentName: string;
-    studentEmail: string;
+    studentId: string; // Mudamos para enviar o ID do aluno
     quantity: number;
     dueDate: string;
   }) => void;
 }
 
 // Lista de alunos registrados (pode vir de uma API)
-const STUDENTS: Student[] = [
-  { id: "1", name: "João Silva", email: "joao.silva@academy.com" },
-  { id: "2", name: "Maria Santos", email: "maria.santos@academy.com" },
-  { id: "3", name: "Pedro Oliveira", email: "pedro.oliveira@academy.com" },
-  { id: "4", name: "Ana Costa", email: "ana.costa@academy.com" },
-  { id: "5", name: "Carlos Mendes", email: "carlos.mendes@academy.com" },
-];
+// const STUDENTS: Student[] = [
+//   { id: "1", name: "João Silva", email: "joao.silva@academy.com" },
+//   { id: "2", name: "Maria Santos", email: "maria.santos@academy.com" },
+//   { id: "3", name: "Pedro Oliveira", email: "pedro.oliveira@academy.com" },
+//   { id: "4", name: "Ana Costa", email: "ana.costa@academy.com" },
+//   { id: "5", name: "Carlos Mendes", email: "carlos.mendes@academy.com" },
+// ];
 
 export default function EmprestarEquipamentoModal({
   open,
   onOpenChange,
   equipmentName,
   onConfirm,
+  students = [],
 }: EmprestarEquipamentoModalProps) {
   const [formData, setFormData] = useState({
     studentId: "",
@@ -45,7 +47,7 @@ export default function EmprestarEquipamentoModal({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const selectedStudent = STUDENTS.find((s) => s.id === formData.studentId);
+  const selectedStudent = students.find((s) => s.id === formData.studentId);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -120,7 +122,7 @@ export default function EmprestarEquipamentoModal({
                 <SelectValue placeholder="Selecione um aluno" />
               </SelectTrigger>
               <SelectContent>
-                {STUDENTS.map((student) => (
+                {students.map((student) => (
                   <SelectItem key={student.id} value={student.id}>
                     {student.name}
                   </SelectItem>
@@ -140,7 +142,7 @@ export default function EmprestarEquipamentoModal({
               </label>
               <Input
                 type="email"
-                value={selectedStudent.email}
+                value={selectedStudent?.email || ""}
                 disabled
                 className="w-full border-border bg-gray-50"
               />
@@ -201,6 +203,7 @@ export default function EmprestarEquipamentoModal({
             </Button>
             <Button
               type="submit"
+              onClick={() => onConfirm(formData)}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
             >
               Confirmar Empréstimo
