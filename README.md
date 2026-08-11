@@ -1,5 +1,5 @@
 # Sistema_emprestimo_de_equipamentos_do_laboratorio
-## É necessário ter PostgreSQL e Node.js
+## - É necessário ter PostgreSQL e Node.js
 
 ## Para criar o Banco de Dados no PostgreSQL:
 ### 1. Inicialmente abra o pgAdmin4 do PostgreSQL
