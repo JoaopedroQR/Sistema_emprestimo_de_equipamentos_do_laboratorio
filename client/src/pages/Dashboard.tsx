@@ -4,7 +4,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, CheckCircle, Clock, Package } from "lucide-react";
+import { AlertCircle, CheckCircle, Clock, Package, CheckCircle2 } from "lucide-react";
 
 interface LoanItem {
   id: string;
@@ -14,33 +14,83 @@ interface LoanItem {
   status: "active" | "overdue" | "returned";
 }
 
+// export default function Dashboard() {
+//   const [, navigate] = useLocation();
+//   const [userRole, setUserRole] = useState<"admin" | "user">("user");
+//   const [userName, setUserName] = useState("Usuário Demo");
+//   const [loans, setLoans] = useState<LoanItem[]>([
+//     {
+//       id: "1",
+//       equipment: "Notebook Lenovo",
+//       borrowDate: "2024-08-01",
+//       dueDate: "2024-08-08",
+//       status: "active",
+//     },
+//     {
+//       id: "2",
+//       equipment: "Microscópio Digital",
+//       borrowDate: "2024-07-28",
+//       dueDate: "2024-08-04",
+//       status: "overdue",
+//     },
+//     {
+//       id: "3",
+//       equipment: "Osciloscópio",
+//       borrowDate: "2024-07-20",
+//       dueDate: "2024-07-27",
+//       status: "returned",
+//     },
+//   ]);
+
 export default function Dashboard() {
   const [, navigate] = useLocation();
   const [userRole, setUserRole] = useState<"admin" | "user">("user");
   const [userName, setUserName] = useState("Usuário Demo");
-  const [loans, setLoans] = useState<LoanItem[]>([
-    {
-      id: "1",
-      equipment: "Notebook Lenovo",
-      borrowDate: "2024-08-01",
-      dueDate: "2024-08-08",
-      status: "active",
-    },
-    {
-      id: "2",
-      equipment: "Microscópio Digital",
-      borrowDate: "2024-07-28",
-      dueDate: "2024-08-04",
-      status: "overdue",
-    },
-    {
-      id: "3",
-      equipment: "Osciloscópio",
-      borrowDate: "2024-07-20",
-      dueDate: "2024-07-27",
-      status: "returned",
-    },
+  const [stats, setStats] = useState([
+    { label: "Total de Equipamentos", value: "0", icon: Package, color: "text-blue-600" },
+    { label: "Disponíveis", value: "0", icon: CheckCircle2, color: "text-green-600" },
+    { label: "Emprestados", value: "0", icon: Clock, color: "text-blue-600" },
+    { label: "Em Manutenção", value: "0", icon: AlertCircle, color: "text-yellow-600" },
   ]);
+  
+  const [recentBorrowings, setRecentBorrowings] = useState<any[]>([]);
+
+  const fetchDashboardData = async () => {
+    try {
+      // 1. Busca Equipamentos para calcular as estatísticas
+      const resEq = await fetch('/api/equipamentos');
+      const equipments = await resEq.json();
+      
+      const total = equipments.length;
+      const available = equipments.filter((e: any) => e.status === 'available').length;
+      const borrowed = equipments.filter((e: any) => e.status === 'borrowed').length;
+      const maintenance = equipments.filter((e: any) => e.status === 'maintenance').length;
+
+      setStats([
+        { label: "Total de Equipamentos", value: total.toString(), icon: Package, color: "text-blue-600" },
+        { label: "Disponíveis", value: available.toString(), icon: CheckCircle2, color: "text-green-600" },
+        { label: "Emprestados", value: borrowed.toString(), icon: Clock, color: "text-blue-600" },
+        { label: "Em Manutenção", value: maintenance.toString(), icon: AlertCircle, color: "text-yellow-600" },
+      ]);
+
+      // 2. Busca os Empréstimos recentes
+      const resEmp = await fetch('/api/emprestimos');
+      const borrowings = await resEmp.json();
+      
+      // Mapeia os dados para o formato que a tabela espera
+      const mappedBorrowings = borrowings.slice(0, 5).map((b: any) => ({
+        id: b.id_emprestimo.toString(),
+        equipment: b.equipamento_nome,
+        student: b.aluno_nome,
+        date: new Date(b.data_emprestimo).toLocaleDateString('pt-BR'),
+        status: b.data_devolucao_real ? "Devolvido" : "Pendente",
+      }));
+
+      setRecentBorrowings(mappedBorrowings);
+    } catch (error) {
+      console.error("Erro ao carregar dados do Dashboard:", error);
+    }
+  };
 
   useEffect(() => {
     const role = (localStorage.getItem("userRole") as "admin" | "user" | null) || "user";
@@ -48,7 +98,7 @@ export default function Dashboard() {
 
     setUserRole(role);
     setUserName(name);
-  }, [navigate]);
+  }, []);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -78,28 +128,28 @@ export default function Dashboard() {
     }
   };
 
-  const stats = [
-    {
-      label: "Empréstimos Ativos",
-      value: loans.filter((l) => l.status === "active").length,
-      color: "bg-white border-gray-200",
-    },
-    {
-      label: "Atrasados",
-      value: loans.filter((l) => l.status === "overdue").length,
-      color: "bg-white border-gray-200",
-    },
-    {
-      label: "Devolvidos",
-      value: loans.filter((l) => l.status === "returned").length,
-      color: "bg-white border-gray-200",
-    },
-    {
-      label: "Total de Equipamentos",
-      value: "45",
-      color: "bg-white border-gray-200",
-    },
-  ];
+  // const stats = [
+  //   {
+  //     label: "Empréstimos Ativos",
+  //     value: loans.filter((l) => l.status === "active").length,
+  //     color: "bg-white border-gray-200",
+  //   },
+  //   {
+  //     label: "Atrasados",
+  //     value: loans.filter((l) => l.status === "overdue").length,
+  //     color: "bg-white border-gray-200",
+  //   },
+  //   {
+  //     label: "Devolvidos",
+  //     value: loans.filter((l) => l.status === "returned").length,
+  //     color: "bg-white border-gray-200",
+  //   },
+  //   {
+  //     label: "Total de Equipamentos",
+  //     value: "45",
+  //     color: "bg-white border-gray-200",
+  //   },
+  // ];
 
   return (
     <DashboardLayout userRole={userRole} userName={userName}>
@@ -150,7 +200,7 @@ export default function Dashboard() {
                 </Button>
               </div>
 
-              <div className="space-y-3">
+              {/* <div className="space-y-3">
                 {loans.map((loan) => (
                   <div
                     key={loan.id}
@@ -170,7 +220,43 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ))}
+              </div> */}
+
+              <div className="space-y-3">
+                {/* Mudamos 'loans' para 'recentBorrowings' */}
+                {recentBorrowings.map((loan) => (
+                  <div
+                    key={loan.id}
+                    className="p-4 bg-gray-50 rounded-lg border-l-4 border-red-600 hover:bg-gray-100 transition-colors"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-900">
+                          {loan.equipment}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {/* Ajustamos 'borrowDate' para 'date' que é o que vem do nosso banco */}
+                          Emprestado em: {loan.date} | Status: {loan.status}
+                        </p>
+                      </div>
+                      {/* Se o seu arquivo tiver a função getStatusBadge, ela vai funcionar aqui */}
+                      <div className="text-xs font-medium px-2 py-1 bg-red-100 text-red-800 rounded">
+                        Pendente
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* Se não houver nada no banco, mostra um aviso amigável */}
+                {recentBorrowings.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center py-4">
+                    Nenhuma pendência encontrada no momento.
+                  </p>
+                )}
               </div>
+
+              {/* Onde acaba o novo loans*/}
+
             </Card>
           </div>
 
@@ -221,12 +307,12 @@ export default function Dashboard() {
             </Card>
 
             {/* Info Card */}
-            <Card className="p-6 border-2 border-red-200 bg-red-50 mt-4">
+            {/* <Card className="p-6 border-2 border-red-200 bg-red-50 mt-4">
               <p className="text-sm text-gray-700">
-                <strong>Atenção:</strong> Você tem 1 empréstimo atrasado. Por
-                favor, devolva o equipamento o mais breve possível.
-              </p>
-            </Card>
+                {/* <strong>Atenção:</strong> Você tem 1 empréstimo atrasado. Por
+                favor, devolva o equipamento o mais breve possível. */}
+              {/* </p> */}
+            {/* </Card> */}
           </div>
         </div>
       </div>
