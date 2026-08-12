@@ -57,42 +57,47 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      // 1. Busca Equipamentos para calcular as estatísticas
-      const resEq = await fetch('/api/equipamentos');
+      // 1. Busca Equipamentos (Porta 8000)
+      const resEq = await fetch('http://localhost:8000/api/equipamentos' );
       const equipments = await resEq.json();
       
-      const total = equipments.length;
-      const available = equipments.filter((e: any) => e.status === 'available').length;
-      const borrowed = equipments.filter((e: any) => e.status === 'borrowed').length;
-      const maintenance = equipments.filter((e: any) => e.status === 'maintenance').length;
+      const safeEquipments = Array.isArray(equipments) ? equipments : [];
+      
+      const total = safeEquipments.length;
+      const available = safeEquipments.filter((e: any) => e.status === 'available').length;
+      const borrowed = safeEquipments.filter((e: any) => e.status === 'borrowed').length;
+      const maintenance = safeEquipments.filter((e: any) => e.status === 'maintenance').length;
 
       setStats([
-        { label: "Total de Equipamentos", value: total.toString(), icon: Package, color: "text-blue-600" },
-        { label: "Disponíveis", value: available.toString(), icon: CheckCircle2, color: "text-green-600" },
-        { label: "Emprestados", value: borrowed.toString(), icon: Clock, color: "text-blue-600" },
-        { label: "Em Manutenção", value: maintenance.toString(), icon: AlertCircle, color: "text-yellow-600" },
+        { label: "Total de Equipamentos", value: total.toString(), icon: Package, color: "text-blue-600", trend: "" },
+        { label: "Disponíveis", value: available.toString(), icon: CheckCircle2, color: "text-green-600", trend: "" },
+        { label: "Emprestados", value: borrowed.toString(), icon: Clock, color: "text-blue-600", trend: "" },
+        { label: "Em Manutenção", value: maintenance.toString(), icon: AlertCircle, color: "text-yellow-600", trend: "" },
       ]);
 
-      // 2. Busca os Empréstimos recentes
-      const resEmp = await fetch('/api/emprestimos');
+      // 2. Busca Empréstimos (Porta 8000)
+      const resEmp = await fetch('http://localhost:8000/api/emprestimos' );
       const borrowings = await resEmp.json();
       
-      // Mapeia os dados para o formato que a tabela espera
-      const mappedBorrowings = borrowings.slice(0, 5).map((b: any) => ({
-        id: b.id_emprestimo.toString(),
-        equipment: b.equipamento_nome,
-        student: b.aluno_nome,
-        date: new Date(b.data_emprestimo).toLocaleDateString('pt-BR'),
-        status: b.data_devolucao_real ? "Devolvido" : "Pendente",
-      }));
-
-      setRecentBorrowings(mappedBorrowings);
+      if (Array.isArray(borrowings)) {
+        const mappedBorrowings = borrowings.map((b: any) => ({
+          id: (b.id_emprestimo || Math.random()).toString(),
+          equipment: b.equipamento_nome || "Equipamento", 
+          student: b.aluno_nome || "Aluno",         
+          date: b.data_emprestimo ? new Date(b.data_emprestimo).toLocaleDateString('pt-BR') : "S/D",
+          dueDate: b.data_devolucao_prevista ? new Date(b.data_devolucao_prevista).toLocaleDateString('pt-BR') : "S/D",
+          returnDate: b.data_devolucao_real ? new Date(b.data_devolucao_real).toLocaleDateString('pt-BR') : null,
+          status: b.data_devolucao_real ? "Devolvido" : "Pendente",
+        }));
+        setRecentBorrowings(mappedBorrowings);
+      }
     } catch (error) {
-      console.error("Erro ao carregar dados do Dashboard:", error);
+      console.error("Erro no Dashboard:", error);
     }
   };
 
   useEffect(() => {
+    fetchDashboardData();
     const role = (localStorage.getItem("userRole") as "admin" | "user" | null) || "user";
     const name = localStorage.getItem("userName") || "Usuário Demo";
 
@@ -190,6 +195,7 @@ export default function Dashboard() {
                 <h3 className="text-xl font-bold text-gray-900">
                   Empréstimos Recentes
                 </h3>
+                {/* Botão Ver Todos ocultado conforme solicitado
                 <Button
                   variant="outline"
                   size="sm"
@@ -198,6 +204,7 @@ export default function Dashboard() {
                 >
                   Ver Todos
                 </Button>
+                */}
               </div>
 
               {/* <div className="space-y-3">
@@ -223,11 +230,13 @@ export default function Dashboard() {
               </div> */}
 
               <div className="space-y-3">
-                {/* Mudamos 'loans' para 'recentBorrowings' */}
+                {/* Mapeamento dinâmico: Cor da borda e Texto do Status variam conforme o banco */}
                 {recentBorrowings.map((loan) => (
                   <div
                     key={loan.id}
-                    className="p-4 bg-gray-50 rounded-lg border-l-4 border-red-600 hover:bg-gray-100 transition-colors"
+                    className={`p-4 bg-gray-50 rounded-lg border-l-4 ${
+                      loan.status === "Devolvido" ? "border-green-600" : "border-red-600"
+                    } hover:bg-gray-100 transition-colors`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -235,13 +244,16 @@ export default function Dashboard() {
                           {loan.equipment}
                         </p>
                         <p className="text-xs text-gray-600 mt-1">
-                          {/* Ajustamos 'borrowDate' para 'date' que é o que vem do nosso banco */}
-                          Emprestado em: {loan.date} | Status: {loan.status}
+                          Emprestado em: {loan.date} | Previsto: {loan.dueDate}
+                          {loan.returnDate && ` | Entregue em: ${loan.returnDate}`}
                         </p>
                       </div>
-                      {/* Se o seu arquivo tiver a função getStatusBadge, ela vai funcionar aqui */}
-                      <div className="text-xs font-medium px-2 py-1 bg-red-100 text-red-800 rounded">
-                        Pendente
+                      <div className={`text-xs font-medium px-2 py-1 rounded ${
+                        loan.status === "Devolvido" 
+                          ? "bg-green-100 text-green-800" 
+                          : "bg-red-100 text-red-800"
+                      }`}>
+                        {loan.status === "Devolvido" ? "Entregue" : "Pendente"}
                       </div>
                     </div>
                   </div>
