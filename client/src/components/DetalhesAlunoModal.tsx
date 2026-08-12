@@ -9,6 +9,7 @@ interface Emprestimo {
   equipment: string;
   borrowDate: string;
   dueDate: string;
+  returnDate?: string;
   status: "active" | "overdue" | "returned";
 }
 
@@ -135,55 +136,26 @@ export default function DetalhesAlunoModal({
                             </p>
                           </div>
                           <div>
-                            <p className="text-gray-600">Devolução</p>
+                            <p className="text-gray-600">Devolução Prevista</p>
                             <p className="text-gray-900">
-                              {new Date(emp.dueDate).toLocaleDateString(
-                                "pt-BR"
-                              )}
+                              {new Date(emp.dueDate).toLocaleDateString("pt-BR")}
                             </p>
                           </div>
+                          {emp.status === 'returned' && emp.returnDate && (
+                            <div>
+                              <p className="text-gray-600">Entregue em</p>
+                              <p className="text-gray-900">
+                                {new Date(emp.returnDate).toLocaleDateString("pt-BR")}
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <p className="text-gray-600">Status</p>
                             {getStatusBadge(emp.status)}
                           </div>
                         </div>
                       </div>
-                      {emp.status !== "returned" && (
-                        <Button
-                          onClick={() => setDevolvendoId(emp.id)}
-                          size="sm"
-                          className="ml-3 bg-red-600 hover:bg-red-700 text-white whitespace-nowrap"
-                        >
-                          Devolver
-                        </Button>
-                      )}
                     </div>
-                    {devolvendoId === emp.id && (
-                      <div className="mt-3 pt-3 border-t border-gray-200">
-                        <p className="text-xs text-gray-600 mb-2">
-                          Confirma a devolução de {emp.equipment}?
-                        </p>
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => setDevolvendoId(null)}
-                            size="sm"
-                            variant="outline"
-                            className="flex-1 border-gray-300 text-gray-900 hover:bg-gray-50"
-                          >
-                            Cancelar
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              setDevolvendoId(null);
-                            }}
-                            size="sm"
-                            className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                          >
-                            Confirmar Devolução
-                          </Button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -207,39 +179,7 @@ export default function DetalhesAlunoModal({
                     resolvidas.
                   </p>
                 </div>
-                {!showResolvePendency && (
-                  <Button
-                    onClick={() => setShowResolvePendency(true)}
-                    className="bg-red-600 hover:bg-red-700 text-white whitespace-nowrap ml-3"
-                  >
-                    Resolver
-                  </Button>
-                )}
               </div>
-
-              {showResolvePendency && (
-                <div className="mt-4 pt-4 border-t border-red-200">
-                  <p className="text-sm text-red-900 mb-3">
-                    Tem certeza que deseja resolver a pendência deste aluno?
-                  </p>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => setShowResolvePendency(false)}
-                      variant="outline"
-                      className="flex-1 border-red-300 text-red-900 hover:bg-red-100"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button
-                      onClick={handleResolvePendency}
-                      className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      <CheckCircle className="w-4 h-4 mr-2" />
-                      Confirmar
-                    </Button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
