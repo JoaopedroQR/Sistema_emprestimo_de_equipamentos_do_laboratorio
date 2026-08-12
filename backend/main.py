@@ -1,17 +1,18 @@
 import os
 from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import Optional, List
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+from datetime import datetime
 
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgres://postgres:admin123@localhost:5432/projeto")
 
-app = FastAPI(title="Sistema de Empréstimo de Equipamentos de Laboratório - API", version="2.0.0")
+app = FastAPI(title="Sistema de Empréstimo de Equipamentos de Laboratório - API", version="2.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,7 +23,6 @@ app.add_middleware(
 )
 
 def get_db_connection():
-    # Convert postgres:// to postgresql:// if necessary for psycopg2
     url = DATABASE_URL
     if url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql://", 1)
@@ -61,10 +61,13 @@ class EmprestimoCreate(BaseModel):
     id_aluno: int
     id_equipamento: int
     data_devolucao_prevista: str
+    quantidade: int = 1
     observacoes: Optional[str] = None
 
 class DevolucaoCreate(BaseModel):
     id_equipamento: int
+    id_aluno: int
+    quantidade: int
 
 # --- Rotas de Alunos ---
 @app.get("/api/alunos")
@@ -72,8 +75,17 @@ def listar_alunos():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM ALUNO ORDER BY nome ASC")
+        query = """
+            SELECT a.*, 
+            (SELECT COUNT(*) FROM EMPRESTIMO e WHERE e.id_aluno = a.id_aluno AND e.data_devolucao_real IS NULL) as active_loan_count,
+            (SELECT COUNT(*) FROM EMPRESTIMO e WHERE e.id_aluno = a.id_aluno AND e.data_devolucao_real IS NULL AND e.data_devolucao_prevista < NOW()) > 0 as tem_atraso
+            FROM ALUNO a
+            ORDER BY a.nome ASC
+        """
+        cur.execute(query)
         alunos = cur.fetchall()
+        for aluno in alunos:
+            aluno["tem_pendencia"] = aluno["tem_pendencia"] or aluno["tem_atraso"]
         return alunos
     finally:
         cur.close()
@@ -84,11 +96,7 @@ def criar_aluno(aluno: AlunoCreate):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        query = """
-            INSERT INTO ALUNO (nome, matricula, email, telefone, tem_pendencia)
-            VALUES (%s, %s, %s, %s, FALSE)
-            RETURNING *
-        """
+        query = "INSERT INTO ALUNO (nome, matricula, email, telefone, tem_pendencia) VALUES (%s, %s, %s, %s, FALSE) RETURNING *"
         cur.execute(query, (aluno.nome, aluno.matricula, aluno.email, aluno.telefone))
         novo_aluno = cur.fetchone()
         conn.commit()
@@ -100,71 +108,30 @@ def criar_aluno(aluno: AlunoCreate):
         cur.close()
         conn.close()
 
-@app.get("/api/alunos/{id}")
-def obter_aluno(id: int):
+@app.get("/api/alunos/{id}/historico")
+def historico_aluno(id: int):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM ALUNO WHERE id_aluno = %s", (id,))
-        aluno = cur.fetchone()
-        if not aluno:
-            raise HTTPException(status_code=404, detail="Aluno não encontrado")
-        
-        # Buscar histórico de empréstimos do aluno
-        hist_query = """
-            SELECT e.*, eq.nome as equipamento_nome, eq.numero_serie
+        query = """
+            SELECT 
+                e.id_emprestimo as id, 
+                eq.nome as equipment, 
+                e.data_emprestimo as borrowDate, 
+                e.data_devolucao_prevista as dueDate,
+                e.data_devolucao_real as returnDate,
+                CASE 
+                    WHEN e.data_devolucao_real IS NOT NULL THEN 'returned'
+                    WHEN e.data_devolucao_prevista < NOW() THEN 'overdue'
+                    ELSE 'active'
+                END as status
             FROM EMPRESTIMO e
             JOIN EQUIPAMENTO eq ON e.id_equipamento = eq.id_equipamento
             WHERE e.id_aluno = %s
             ORDER BY e.data_emprestimo DESC
         """
-        cur.execute(hist_query, (id,))
-        emprestimos = cur.fetchall()
-        aluno["emprestimos"] = emprestimos
-        return aluno
-    finally:
-        cur.close()
-        conn.close()
-
-@app.put("/api/alunos/{id}")
-def atualizar_aluno(id: int, aluno: AlunoUpdate):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT * FROM ALUNO WHERE id_aluno = %s", (id,))
-        if not cur.fetchone():
-            raise HTTPException(status_code=404, detail="Aluno não encontrado")
-        
-        fields = []
-        values = []
-        if aluno.nome is not None:
-            fields.append("nome = %s")
-            values.append(aluno.nome)
-        if aluno.matricula is not None:
-            fields.append("matricula = %s")
-            values.append(aluno.matricula)
-        if aluno.email is not None:
-            fields.append("email = %s")
-            values.append(aluno.email)
-        if aluno.telefone is not None:
-            fields.append("telefone = %s")
-            values.append(aluno.telefone)
-        if aluno.tem_pendencia is not None:
-            fields.append("tem_pendencia = %s")
-            values.append(aluno.tem_pendencia)
-        
-        if not fields:
-            raise HTTPException(status_code=400, detail="Nenhum campo fornecido para atualização")
-        
-        values.append(id)
-        query = f"UPDATE ALUNO SET {', '.join(fields)} WHERE id_aluno = %s RETURNING *"
-        cur.execute(query, values)
-        updated = cur.fetchone()
-        conn.commit()
-        return updated
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        cur.execute(query, (id,))
+        return cur.fetchall()
     finally:
         cur.close()
         conn.close()
@@ -174,42 +141,25 @@ def deletar_aluno(id: int):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM ALUNO WHERE id_aluno = %s", (id,))
-        if not cur.fetchone():
-            raise HTTPException(status_code=404, detail="Aluno não encontrado")
+        # Verifica se há empréstimos ativos (não devolvidos)
+        cur.execute("SELECT COUNT(*) FROM EMPRESTIMO WHERE id_aluno = %s AND data_devolucao_real IS NULL", (id,))
+        if cur.fetchone()["count"] > 0:
+            raise HTTPException(status_code=400, detail="Não é possível excluir um aluno com empréstimos ativos.")
         
+        # Remove histórico de empréstimos (já devolvidos) para evitar erro de FK
+        cur.execute("DELETE FROM EMPRESTIMO WHERE id_aluno = %s", (id,))
+        
+        # Agora remove o aluno
         cur.execute("DELETE FROM ALUNO WHERE id_aluno = %s", (id,))
         conn.commit()
-        return {"message": "Aluno removido com sucesso"}
+        return {"message": "Aluno excluído com sucesso"}
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cur.close()
         conn.close()
-
-@app.patch("/api/alunos/{id}/pendencia")
-def alternar_pendencia(id: int):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT tem_pendencia FROM ALUNO WHERE id_aluno = %s", (id,))
-        res = cur.fetchone()
-        if not res:
-            raise HTTPException(status_code=404, detail="Aluno não encontrado")
-        
-        nova_pendencia = not res["tem_pendencia"]
-        cur.execute("UPDATE ALUNO SET tem_pendencia = %s WHERE id_aluno = %s RETURNING *", (nova_pendencia, id))
-        updated = cur.fetchone()
-        conn.commit()
-        return updated
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        cur.close()
-        conn.close()
-
 
 # --- Rotas de Equipamentos ---
 @app.get("/api/equipamentos")
@@ -217,9 +167,32 @@ def listar_equipamentos():
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM EQUIPAMENTO ORDER BY nome ASC")
-        equipamentos = cur.fetchall()
-        return equipamentos
+        query = """
+            SELECT eq.*, 
+            COALESCE((SELECT SUM(quantidade) FROM EMPRESTIMO e WHERE e.id_equipamento = eq.id_equipamento AND e.data_devolucao_real IS NULL), 0) as active_loan_quantity
+            FROM EQUIPAMENTO eq
+            ORDER BY eq.nome ASC
+        """
+        cur.execute(query)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+@app.get("/api/equipamentos/{id}/alunos")
+def listar_alunos_com_equipamento(id: int):
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        query = """
+            SELECT DISTINCT a.id_aluno, a.nome, a.email, SUM(e.quantidade) as quantidade_emprestada
+            FROM ALUNO a
+            JOIN EMPRESTIMO e ON a.id_aluno = e.id_aluno
+            WHERE e.id_equipamento = %s AND e.data_devolucao_real IS NULL
+            GROUP BY a.id_aluno, a.nome, a.email
+        """
+        cur.execute(query, (id,))
+        return cur.fetchall()
     finally:
         cur.close()
         conn.close()
@@ -229,75 +202,11 @@ def criar_equipamento(eq: EquipamentoCreate):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        query = """
-            INSERT INTO EQUIPAMENTO (nome, numero_serie, descricao, status, data_aquisicao, quantidade)
-            VALUES (%s, %s, %s, %s, CURRENT_DATE, %s)
-            RETURNING *
-        """
+        query = "INSERT INTO EQUIPAMENTO (nome, numero_serie, descricao, status, data_aquisicao, quantidade) VALUES (%s, %s, %s, %s, CURRENT_DATE, %s) RETURNING *"
         cur.execute(query, (eq.nome, eq.numero_serie, eq.descricao, eq.status or "available", eq.quantidade or 1))
         novo_eq = cur.fetchone()
         conn.commit()
         return novo_eq
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
-    finally:
-        cur.close()
-        conn.close()
-
-@app.get("/api/equipamentos/{id}")
-def obter_equipamento(id: int):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT * FROM EQUIPAMENTO WHERE id_equipamento = %s", (id,))
-        eq = cur.fetchone()
-        if not eq:
-            raise HTTPException(status_code=404, detail="Equipamento não encontrado")
-        return eq
-    finally:
-        cur.close()
-        conn.close()
-
-@app.put("/api/equipamentos/{id}")
-def atualizar_equipamento(id: int, eq: EquipamentoUpdate):
-    conn = get_db_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT * FROM EQUIPAMENTO WHERE id_equipamento = %s", (id,))
-        if not cur.fetchone():
-            raise HTTPException(status_code=404, detail="Equipamento não encontrado")
-        
-        fields = []
-        values = []
-        if eq.nome is not None:
-            fields.append("nome = %s")
-            values.append(eq.nome)
-        if eq.numero_serie is not None:
-            fields.append("numero_serie = %s")
-            values.append(eq.numero_serie)
-        if eq.descricao is not None:
-            fields.append("descricao = %s")
-            values.append(eq.descricao)
-        if eq.status is not None:
-            fields.append("status = %s")
-            values.append(eq.status)
-        if eq.quantidade is not None:
-            fields.append("quantidade = %s")
-            values.append(eq.quantidade)
-        
-        if not fields:
-            raise HTTPException(status_code=400, detail="Nenhum campo fornecido para atualização")
-        
-        values.append(id)
-        query = f"UPDATE EQUIPAMENTO SET {', '.join(fields)} WHERE id_equipamento = %s RETURNING *"
-        cur.execute(query, values)
-        updated = cur.fetchone()
-        conn.commit()
-        return updated
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
     finally:
         cur.close()
         conn.close()
@@ -307,20 +216,24 @@ def deletar_equipamento(id: int):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT * FROM EQUIPAMENTO WHERE id_equipamento = %s", (id,))
-        if not cur.fetchone():
-            raise HTTPException(status_code=404, detail="Equipamento não encontrado")
+        # Verifica se há empréstimos ativos
+        cur.execute("SELECT COUNT(*) FROM EMPRESTIMO WHERE id_equipamento = %s AND data_devolucao_real IS NULL", (id,))
+        if cur.fetchone()["count"] > 0:
+            raise HTTPException(status_code=400, detail="Não é possível excluir um equipamento que está emprestado.")
+        
+        # Remove histórico de empréstimos (já devolvidos)
+        cur.execute("DELETE FROM EMPRESTIMO WHERE id_equipamento = %s", (id,))
         
         cur.execute("DELETE FROM EQUIPAMENTO WHERE id_equipamento = %s", (id,))
         conn.commit()
-        return {"message": "Equipamento removido com sucesso"}
+        return {"message": "Equipamento excluído com sucesso"}
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         cur.close()
         conn.close()
-
 
 # --- Rotas de Empréstimos e Devoluções ---
 @app.get("/api/emprestimos")
@@ -329,69 +242,49 @@ def listar_emprestimos():
     cur = conn.cursor()
     try:
         query = """
-            SELECT 
-                e.id_emprestimo,
-                e.id_aluno,
-                e.id_equipamento,
-                e.data_emprestimo,
-                e.data_devolucao_prevista,
-                e.data_devolucao_real,
-                e.observacoes,
-                a.nome as aluno_nome,
-                eq.nome as equipamento_nome
+            SELECT e.*, a.nome as aluno_nome, eq.nome as equipamento_nome 
             FROM EMPRESTIMO e
             JOIN ALUNO a ON e.id_aluno = a.id_aluno
             JOIN EQUIPAMENTO eq ON e.id_equipamento = eq.id_equipamento
             ORDER BY e.data_emprestimo DESC
         """
         cur.execute(query)
-        emprestimos = cur.fetchall()
-        return emprestimos
+        return cur.fetchall()
     finally:
         cur.close()
         conn.close()
 
-@app.post("/api/emprestimos", status_code=status.HTTP_201_CREATED)
+@app.post("/api/emprestimos")
 def criar_emprestimo(emp: EmprestimoCreate):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # Verificar se o aluno tem pendência
-        cur.execute("SELECT tem_pendencia FROM ALUNO WHERE id_aluno = %s", (emp.id_aluno,))
+        cur.execute("""
+            SELECT tem_pendencia, 
+            (SELECT COUNT(*) FROM EMPRESTIMO e WHERE e.id_aluno = %s AND e.data_devolucao_real IS NULL AND e.data_devolucao_prevista < NOW()) as atrasos
+            FROM ALUNO WHERE id_aluno = %s
+        """, (emp.id_aluno, emp.id_aluno))
         aluno = cur.fetchone()
-        if not aluno:
-            raise HTTPException(status_code=404, detail="Aluno não encontrado")
-        if aluno["tem_pendencia"]:
-            raise HTTPException(status_code=400, detail="Aluno possui pendências ativas e não pode realizar novos empréstimos")
+        if not aluno: raise HTTPException(status_code=404, detail="Aluno não encontrado")
+        if aluno["tem_pendencia"] or aluno["atrasos"] > 0:
+            raise HTTPException(status_code=400, detail="Empréstimo bloqueado: Aluno possui pendências ou atrasos.")
 
-        # Verificar se o equipamento está disponível
-        cur.execute("SELECT status FROM EQUIPAMENTO WHERE id_equipamento = %s", (emp.id_equipamento,))
+        cur.execute("SELECT quantidade FROM EQUIPAMENTO WHERE id_equipamento = %s", (emp.id_equipamento,))
         eq = cur.fetchone()
-        if not eq:
-            raise HTTPException(status_code=404, detail="Equipamento não encontrado")
-        if eq["status"] != "available":
-            raise HTTPException(status_code=400, detail="Equipamento não está disponível para empréstimo")
+        if not eq or eq["quantidade"] < emp.quantidade:
+            raise HTTPException(status_code=400, detail="Estoque insuficiente")
 
-        # 1. Cria o empréstimo
-        query_emp = """
-            INSERT INTO EMPRESTIMO (id_aluno, id_equipamento, data_emprestimo, data_devolucao_prevista, observacoes)
-            VALUES (%s, %s, NOW(), %s, %s)
-            RETURNING *
-        """
-        cur.execute(query_emp, (emp.id_aluno, emp.id_equipamento, emp.data_devolucao_prevista, emp.observacoes))
-        novo_emp = cur.fetchone()
-
-        # 2. Muda o status do equipamento para 'borrowed'
-        cur.execute("UPDATE EQUIPAMENTO SET status = 'borrowed' WHERE id_equipamento = %s", (emp.id_equipamento,))
-
+        cur.execute(
+            "INSERT INTO EMPRESTIMO (id_aluno, id_equipamento, data_emprestimo, data_devolucao_prevista, quantidade, observacoes) VALUES (%s, %s, NOW(), %s, %s, %s)",
+            (emp.id_aluno, emp.id_equipamento, emp.data_devolucao_prevista, emp.quantidade, emp.observacoes)
+        )
+        
+        nova_qtd = eq["quantidade"] - emp.quantidade
+        status_eq = "borrowed" if nova_qtd == 0 else "available"
+        cur.execute("UPDATE EQUIPAMENTO SET quantidade = %s, status = %s WHERE id_equipamento = %s", (nova_qtd, status_eq, emp.id_equipamento))
+        
         conn.commit()
-        return novo_emp
-    except HTTPException as he:
-        conn.rollback()
-        raise he
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"message": "Sucesso"}
     finally:
         cur.close()
         conn.close()
@@ -401,31 +294,81 @@ def registrar_devolucao(dev: DevolucaoCreate):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        # 1. Atualiza a data de devolução real no último empréstimo pendente desse item
         cur.execute(
-            "UPDATE EMPRESTIMO SET data_devolucao_real = NOW() WHERE id_equipamento = %s AND data_devolucao_real IS NULL RETURNING *",
-            (dev.id_equipamento,)
+            "SELECT id_emprestimo, quantidade FROM EMPRESTIMO WHERE id_equipamento = %s AND id_aluno = %s AND data_devolucao_real IS NULL ORDER BY data_emprestimo ASC",
+            (dev.id_equipamento, dev.id_aluno)
         )
-        emp = cur.fetchone()
-        if not emp:
-            raise HTTPException(status_code=404, detail="Nenhum empréstimo ativo encontrado para este equipamento")
+        loans = cur.fetchall()
+        total_que_o_aluno_tem = sum(loan["quantidade"] for loan in loans)
+        
+        if not loans: raise HTTPException(status_code=400, detail="Sem empréstimo ativo")
+        if dev.quantidade > total_que_o_aluno_tem: raise HTTPException(status_code=400, detail=f"O aluno só possui {total_que_o_aluno_tem} unidades")
 
-        # 2. Volta o status do equipamento para 'available'
-        cur.execute("UPDATE EQUIPAMENTO SET status = 'available' WHERE id_equipamento = %s", (dev.id_equipamento,))
+        qtd_restante = dev.quantidade
+        for loan in loans:
+            if qtd_restante <= 0: break
+            if loan["quantidade"] <= qtd_restante:
+                cur.execute("UPDATE EMPRESTIMO SET data_devolucao_real = NOW() WHERE id_emprestimo = %s", (loan["id_emprestimo"],))
+                qtd_restante -= loan["quantidade"]
+            else:
+                cur.execute("UPDATE EMPRESTIMO SET quantidade = %s WHERE id_emprestimo = %s", (loan["quantidade"] - qtd_restante, loan["id_emprestimo"]))
+                qtd_restante = 0
 
+        cur.execute("SELECT quantidade FROM EQUIPAMENTO WHERE id_equipamento = %s", (dev.id_equipamento,))
+        eq = cur.fetchone()
+        cur.execute("UPDATE EQUIPAMENTO SET quantidade = %s, status = 'available' WHERE id_equipamento = %s", (eq["quantidade"] + dev.quantidade, dev.id_equipamento))
+        
         conn.commit()
-        return {"message": "Equipamento devolvido com sucesso!", "emprestimo": emp}
-    except HTTPException as he:
-        conn.rollback()
-        raise he
-    except Exception as e:
-        conn.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"message": "Devolvido"}
     finally:
         cur.close()
         conn.close()
 
-# --- Endpoint de Teste ---
+# --- Rotas de Relatórios ---
+@app.get("/api/relatorios/atrasados")
+def relatorio_atrasados():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        query = """
+            SELECT e.id_emprestimo as id, eq.nome as equipment, a.nome as student, e.data_emprestimo as borrowDate, e.data_devolucao_prevista as dueDate,
+            EXTRACT(DAY FROM (NOW() - e.data_devolucao_prevista))::int as daysOverdue
+            FROM EMPRESTIMO e
+            JOIN ALUNO a ON e.id_aluno = a.id_aluno
+            JOIN EQUIPAMENTO eq ON e.id_equipamento = eq.id_equipamento
+            WHERE e.data_devolucao_real IS NULL AND e.data_devolucao_prevista < NOW()
+            ORDER BY daysOverdue DESC
+        """
+        cur.execute(query)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+@app.get("/api/relatorios/top-equipamentos")
+def relatorio_top_equipamentos():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        query = "SELECT eq.nome as name, COUNT(e.id_emprestimo) as count FROM EQUIPAMENTO eq JOIN EMPRESTIMO e ON eq.id_equipamento = e.id_equipamento GROUP BY eq.id_equipamento, eq.nome ORDER BY count DESC, MIN(e.data_emprestimo) ASC LIMIT 5"
+        cur.execute(query)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
+@app.get("/api/relatorios/top-alunos")
+def relatorio_top_alunos():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    try:
+        query = "SELECT a.nome as name, COUNT(e.id_emprestimo) as count FROM ALUNO a JOIN EMPRESTIMO e ON a.id_aluno = e.id_aluno GROUP BY a.id_aluno, a.nome ORDER BY count DESC, MIN(e.data_emprestimo) ASC LIMIT 5"
+        cur.execute(query)
+        return cur.fetchall()
+    finally:
+        cur.close()
+        conn.close()
+
 @app.get("/api/teste")
 def teste():
     return {"message": "API FastAPI rodando com sucesso!"}
