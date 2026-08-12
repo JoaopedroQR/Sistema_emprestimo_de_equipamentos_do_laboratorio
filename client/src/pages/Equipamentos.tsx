@@ -9,7 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Filter } from "lucide-react";
+import { Search, Plus, Filter, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Equipment {
@@ -18,6 +18,8 @@ interface Equipment {
   serialNumber: string;
   status: "available" | "borrowed" | "maintenance";
   quantity: number;
+  totalQuantity: number;
+  activeLoanQuantity: number;
   borrowedBy?: string;
   dueDate?: string;
   image?: string;
@@ -34,6 +36,7 @@ export default function Equipamentos() {
   const [editarModalOpen, setEditarModalOpen] = useState(false);
   const [novoEquipamentoModalOpen, setNovoEquipamentoModalOpen] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   // const [equipments, setEquipments] = useState<Equipment[]>([
     // {
     //   id: "1",
@@ -81,27 +84,30 @@ export default function Equipamentos() {
   
   const fetchEquipments = async () => {
     try {
-      const response = await fetch('/api/equipamentos');
+      // FORÇANDO A PORTA 8000 DO PYTHON
+      const response = await fetch('http://localhost:8000/api/equipamentos' );
       const data = await response.json();
       
-      // Aqui nós mapeamos os nomes do banco para os nomes que o front espera
-      const mappedData = data.map((item: any) => ({
-        id: item.id_equipamento.toString(),
-        name: item.nome,
-        serialNumber: item.numero_serie,
-        status: item.status || 'available', // Se estiver nulo no banco, assume disponível
-        quantity: 1, // Como seu banco não tem quantidade, assumimos 1 por item
-      }));
-      
-      setEquipments(mappedData);
+      if (Array.isArray(data)) {
+        const mappedData = data.map((item: any) => ({
+          id: (item.id_equipamento || "").toString(),
+          name: item.nome || "Sem Nome",
+          serialNumber: item.numero_serie || "S/N",
+          status: item.status || 'available',
+          quantity: item.quantidade || 0,
+          totalQuantity: (item.quantidade || 0) + (item.active_loan_quantity || 0),
+          activeLoanQuantity: item.active_loan_quantity || 0,
+        }));
+        setEquipments(mappedData);
+      }
     } catch (error) {
-      console.error("Erro ao carregar dados do banco:", error);
+      console.error("Erro ao carregar equipamentos:", error);
     }
   };
 
   const fetchStudents = async () => {
     try {
-      const response = await fetch('/api/alunos');
+      const response = await fetch('http://localhost:8000/api/alunos');
       const data = await response.json();
       // Mapeia os alunos do banco para o formato que o Modal espera
       const mappedStudents = data.map((s: any) => ({
@@ -112,6 +118,29 @@ export default function Equipamentos() {
       setStudents(mappedStudents); // Salva na lista de alunos
     } catch (error) {
       console.error("Erro ao carregar alunos:", error);
+    }
+  };
+
+  const handleDeleteEquipment = async (id: string, name: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o equipamento ${name}?`)) return;
+    
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/equipamentos/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        toast.success("Equipamento excluído com sucesso!");
+        fetchEquipments();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || "Erro ao excluir equipamento.");
+      }
+    } catch (error) {
+      toast.error("Erro de conexão ao excluir equipamento.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -144,14 +173,17 @@ export default function Equipamentos() {
     }
   };
 
-  const filteredEquipments = equipments.filter((eq) => {
-    const matchesSearch =
-      eq.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      eq.serialNumber.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter =
-      filterStatus === "all" || eq.status === filterStatus;
+  // FILTRO SEGURO (Evita o erro toLowerCase)
+  const filteredEquipments = (equipments || []).filter((eq) => {
+    const name = (eq.name || "").toLowerCase();
+    const serial = (eq.serialNumber || "").toLowerCase();
+    const search = (searchTerm || "").toLowerCase();
+    
+    const matchesSearch = name.includes(search) || serial.includes(search);
+    const matchesFilter = filterStatus === "all" || eq.status === filterStatus;
     return matchesSearch && matchesFilter;
   });
+
 
   const availableCount = equipments.filter(
     (e) => e.status === "available"
@@ -287,7 +319,7 @@ export default function Equipamentos() {
                       <div>
                         <span className="text-gray-600">Quantidade:</span>
                         <p className="font-semibold text-gray-900">
-                          {equipment.quantity}
+                          {equipment.quantity} disponível de {equipment.totalQuantity}
                         </p>
                       </div>
                       {equipment.borrowedBy && (
@@ -320,7 +352,8 @@ export default function Equipamentos() {
                     >
                       Emprestar
                     </Button>
-                    {equipment.status === "borrowed" && (
+                    {/* O botão Devolver aparece se houver ao menos 1 empréstimo ativo */}
+                    {(equipment.activeLoanQuantity > 0) && (
                       <Button
                         size="sm"
                         onClick={() => {
@@ -333,6 +366,7 @@ export default function Equipamentos() {
                         Registrar Devolução
                       </Button>
                     )}
+                    {/* Botão Editar ocultado conforme solicitado
                     {userRole === "admin" && (
                       <Button
                         size="sm"
@@ -344,6 +378,19 @@ export default function Equipamentos() {
                         className="border-gray-300 text-gray-900 hover:bg-gray-50"
                       >
                         Editar
+                      </Button>
+                    )}
+                    */}
+                    {/* Botão de Excluir Equipamento: Apenas se o total estiver disponível (sem empréstimos ativos) */}
+                    {equipment.activeLoanQuantity === 0 && userRole === "admin" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isDeleting}
+                        onClick={() => handleDeleteEquipment(equipment.id, equipment.name)}
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
                   </div>
@@ -377,22 +424,29 @@ export default function Equipamentos() {
               students={students}
               onConfirm={async (data) => {
                 try {
-                  await fetch('/api/emprestimos', {
+                  const res = await fetch('http://localhost:8000/api/emprestimos', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      id_aluno: data.studentId, // Verifique se o modal usa 'studentId'
+                      id_aluno: data.studentId,
                       id_equipamento: selectedEquipment?.id,
                       data_devolucao_prevista: data.dueDate,
+                      quantidade: data.quantity || 1,
                       observacoes: data.notes || ""
                     })
                   });
                   
-                  await fetchEquipments(); // Atualiza a lista na tela
+                  const resultData = await res.json();
+                  if (!res.ok) {
+                    toast.error(resultData.detail || "Erro ao realizar empréstimo.");
+                    return;
+                  }
+
+                  await fetchEquipments();
                   setEmprestarModalOpen(false);
                   toast.success("Empréstimo realizado com sucesso!");
                 } catch (error) {
-                  toast.error("Erro ao realizar empréstimo.");
+                  toast.error("Erro de conexão ao realizar empréstimo.");
                 }
               }}
             />
@@ -409,19 +463,28 @@ export default function Equipamentos() {
             open={devolucaoModalOpen}
             onOpenChange={setDevolucaoModalOpen}
             equipment={selectedEquipment}
-            onDevolver={async () => {
+            onDevolver={async (data) => {
               try {
-                await fetch('/api/devolucao', {
+                const res = await fetch('http://localhost:8000/api/devolucao', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ id_equipamento: selectedEquipment?.id })
+                  body: JSON.stringify({ 
+                    id_equipamento: selectedEquipment?.id,
+                    id_aluno: data.id_aluno,
+                    quantidade: data.quantidade
+                  })
                 });
                 
-                await fetchEquipments(); // Atualiza a lista na tela
-                setDevolucaoModalOpen(false);
-                toast.success("Equipamento devolvido e liberado!");
+                if (!res.ok) {
+                  const errorData = await res.json();
+                  toast.error(errorData.detail || "Erro ao processar devolução.");
+                  return;
+                }
+
+                await fetchEquipments();
+                toast.success("Equipamento devolvido com sucesso!");
               } catch (error) {
-                toast.error("Erro ao processar devolução.");
+                toast.error("Erro de conexão ao processar devolução.");
               }
             }}
           />
@@ -470,11 +533,12 @@ export default function Equipamentos() {
         onAddEquipment={async (newEq) => {
           try {
             // 1. Envia para o seu Banco de Dados via API
-            const response = await fetch('/api/equipamentos', {
+            const response = await fetch('http://localhost:8000/api/equipamentos', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 nome: newEq.name,
+                quantidade: newEq.quantity,
                 numero_serie: newEq.serialNumber,
                 descricao: newEq.description || "",
                 status: "available",
