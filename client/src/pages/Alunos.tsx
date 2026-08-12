@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, AlertCircle } from "lucide-react";
+import { Search, Plus, AlertCircle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface Student {
@@ -15,6 +15,7 @@ interface Student {
   name: string;
   email: string;
   registration: string;
+  phone?: string;
   activeLoanCount: number;
   hasPendency: boolean;
   lastLoan?: string;
@@ -29,6 +30,8 @@ export default function Alunos() {
   const [novoAlunoModalOpen, setNovoAlunoModalOpen] = useState(false);
   const [detalhesModalOpen, setDetalhesModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [studentLoans, setStudentLoans] = useState<any[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   // const [students, setStudents] = useState<Student[]>([
   //   {
   //     id: "1",
@@ -87,7 +90,10 @@ export default function Alunos() {
         ...a,
         id: a.id_aluno.toString(),
         name: a.nome,
-        registration: a.matricula
+        registration: a.matricula,
+        phone: a.telefone,
+        activeLoanCount: a.active_loan_count || 0,
+        hasPendency: a.tem_pendencia || false
       }));
       setStudents(mappedData);
     } catch (error) {
@@ -112,6 +118,29 @@ export default function Alunos() {
 
     setStudents([...students, student]);
     toast.success(`Aluno ${newStudent.name} adicionado com sucesso!`);
+  };
+
+  const handleDeleteStudent = async (studentId: string, studentName: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o aluno ${studentName}?`)) return;
+    
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`http://localhost:8000/api/alunos/${studentId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        toast.success("Aluno excluído com sucesso!");
+        fetchAlunos();
+      } else {
+        const error = await response.json();
+        toast.error(error.detail || "Erro ao excluir aluno.");
+      }
+    } catch (error) {
+      toast.error("Erro de conexão ao excluir aluno.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   useEffect(() => {
@@ -274,6 +303,14 @@ export default function Alunos() {
                           {student.email}
                         </p>
                       </div>
+                      {student.phone && (
+                        <div>
+                          <span className="text-gray-600">Telefone:</span>
+                          <p className="font-medium text-gray-900">
+                            {student.phone}
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <span className="text-gray-600">Empréstimos Ativos:</span>
                         <p className="font-semibold text-gray-900">
@@ -291,11 +328,27 @@ export default function Alunos() {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-2 ml-4">
+                    <div className="flex flex-col gap-2 ml-4">
                     <Button
                       size="sm"
-                      onClick={() => {
+                      onClick={async () => {
                         setSelectedStudent(student);
+                        try {
+                          const res = await fetch(`http://localhost:8000/api/alunos/${student.id}/historico`);
+                          const dataHist = await res.json();
+                          // Mapeia chaves minúsculas do Postgres para o CamelCase que o modal espera
+                          const mappedHist = dataHist.map((h: any) => ({
+                            id: h.id,
+                            equipment: h.equipment,
+                            borrowDate: h.borrowdate || h.borrowDate,
+                            dueDate: h.duedate || h.dueDate,
+                            returnDate: h.returndate || h.returnDate,
+                            status: h.status
+                          }));
+                          setStudentLoans(mappedHist);
+                        } catch (err) {
+                          console.error("Erro ao buscar histórico:", err);
+                        }
                         setDetalhesModalOpen(true);
                       }}
                       variant="outline"
@@ -303,6 +356,18 @@ export default function Alunos() {
                     >
                       Ver Detalhes
                     </Button>
+                    {/* Botão de Excluir Aluno: Apenas se não tiver pendências ou empréstimos ativos */}
+                    {student.activeLoanCount === 0 && !student.hasPendency && userRole === "admin" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isDeleting}
+                        onClick={() => handleDeleteStudent(student.id, student.name)}
+                        className="border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </Card>
@@ -357,22 +422,7 @@ export default function Alunos() {
           onOpenChange={setDetalhesModalOpen}
           student={{
             ...selectedStudent,
-            emprestimos: [
-              {
-                id: "1",
-                equipment: "Notebook Lenovo",
-                borrowDate: "2024-08-01",
-                dueDate: "2024-08-08",
-                status: "active",
-              },
-              {
-                id: "2",
-                equipment: "Microscópio Digital",
-                borrowDate: "2024-07-25",
-                dueDate: "2024-08-04",
-                status: "overdue",
-              },
-            ],
+            emprestimos: studentLoans,
           }}
           onResolvePendency={() => {
             setStudents(
