@@ -46,6 +46,7 @@ export default function EmprestarEquipamentoModal({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedStudent = students.find((s) => s.id === formData.studentId);
 
@@ -64,27 +65,33 @@ export default function EmprestarEquipamentoModal({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validateForm()) {
+    if (!validateForm() || isSubmitting) {
       return;
     }
 
-    onConfirm({
-      studentName: selectedStudent?.name || "",
-      studentEmail: selectedStudent?.email || "",
-      quantity: parseInt(formData.quantity),
-      dueDate: formData.dueDate,
-    });
+    setIsSubmitting(true);
+    try {
+      await onConfirm({
+        studentName: selectedStudent?.name || "",
+        studentId: formData.studentId,
+        studentEmail: selectedStudent?.email || "",
+        quantity: parseInt(formData.quantity),
+        dueDate: formData.dueDate,
+      });
 
-    setFormData({
-      studentId: "",
-      quantity: "1",
-      dueDate: "",
-    });
-    setErrors({});
-    onOpenChange(false);
+      setFormData({
+        studentId: "",
+        quantity: "1",
+        dueDate: "",
+      });
+      setErrors({});
+      onOpenChange(false);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
@@ -154,20 +161,20 @@ export default function EmprestarEquipamentoModal({
             <label className="block text-sm font-medium text-gray-900 mb-1">
               Quantidade *
             </label>
-            <Select value={formData.quantity} onValueChange={(value) =>
-              setFormData({ ...formData, quantity: value })
-            }>
-              <SelectTrigger className="w-full border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {[1, 2, 3, 4, 5].map((num) => (
-                  <SelectItem key={num} value={String(num)}>
-                    {num}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Input
+              type="number"
+              min="1"
+              placeholder="Digite a quantidade"
+              value={formData.quantity}
+              onChange={(e) => {
+                const val = e.target.value;
+                // Permite apenas números inteiros positivos
+                if (val === "" || /^[1-9]\d*$/.test(val)) {
+                  setFormData({ ...formData, quantity: val });
+                }
+              }}
+              className="w-full border-border"
+            />
           </div>
 
           {/* Data de Devolução */}
@@ -203,10 +210,10 @@ export default function EmprestarEquipamentoModal({
             </Button>
             <Button
               type="submit"
-              onClick={() => onConfirm(formData)}
+              disabled={isSubmitting}
               className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
             >
-              Confirmar Empréstimo
+              {isSubmitting ? "Processando..." : "Confirmar Empréstimo"}
             </Button>
           </div>
         </form>
