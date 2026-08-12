@@ -2,8 +2,6 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { X } from "lucide-react";
 
 interface NovoEquipamentoModalProps {
   open: boolean;
@@ -59,7 +57,7 @@ export default function NovoEquipamentoModal({
     onAddEquipment({
       name: formData.name,
       serialNumber: formData.serialNumber,
-      status: formData.status,
+      status: "available", // Sempre disponível ao criar
       quantity: formData.quantity,
     });
 
@@ -88,16 +86,10 @@ export default function NovoEquipamentoModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader className="flex flex-row items-center justify-between">
+        <DialogHeader>
           <DialogTitle className="text-xl font-bold text-gray-900">
             Novo Equipamento
           </DialogTitle>
-          <button
-            onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600"
-          >
-            <X className="w-5 h-5" />
-          </button>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -143,49 +135,25 @@ export default function NovoEquipamentoModal({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* Quantidade */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">
-                Quantidade *
-              </label>
-              <Input
-                type="number"
-                min="1"
-                value={formData.quantity}
-                onChange={(e) =>
-                  setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })
-                }
-                className={`w-full border-border ${
-                  errors.quantity ? "border-red-500" : ""
-                }`}
-              />
-              {errors.quantity && (
-                <p className="text-xs text-red-600 mt-1">{errors.quantity}</p>
-              )}
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="block text-sm font-medium text-gray-900 mb-1">
-                Status *
-              </label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: any) =>
-                  setFormData({ ...formData, status: value })
-                }
-              >
-                <SelectTrigger className="w-full border-border">
-                  <SelectValue placeholder="Selecione o status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="available">Disponível</SelectItem>
-                  <SelectItem value="borrowed">Emprestado</SelectItem>
-                  <SelectItem value="maintenance">Manutenção</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          {/* Quantidade */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 mb-1">
+              Quantidade *
+            </label>
+            <Input
+              type="number"
+              min="1"
+              value={formData.quantity}
+              onChange={(e) =>
+                setFormData({ ...formData, quantity: parseInt(e.target.value) || 0 })
+              }
+              className={`w-full border-border ${
+                errors.quantity ? "border-red-500" : ""
+              }`}
+            />
+            {errors.quantity && (
+              <p className="text-xs text-red-600 mt-1">{errors.quantity}</p>
+            )}
           </div>
 
           {/* Buttons */}
