@@ -21,7 +21,7 @@
 ### 2. Digite *corepack pnpm install*
 ### 3. Digite *corepack pnpm add pg dotenv*
 ### 4. Digite *corepack pnpm build*
-### 5. Digite *corepack pnpm dlx tsx server/index.ts*
+### 5. Digite *corepack pnpm dev*
 ### Obs: Lembre-se de manter o Prompt/PowerShell aberto o tempo inteiro para a conexão não cair
 ### Obs2: A depender de der algum erro por falta de alguma dependência, digitar *corepack pnpm add _____* e colocar as dependências que faltam
 
